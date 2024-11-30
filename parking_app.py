@@ -3,6 +3,7 @@ from PIL import Image
 from ultralytics import YOLO
 import tempfile
 import cv2
+import os
 
 # Initialize YOLO model
 model = YOLO("parking_final.pt")
@@ -25,19 +26,20 @@ def main():
 
             # Perform prediction
             results = model.predict(image)
-            result=results[0]
+            result = results[0]  # Get the first result
             # Display results
             st.subheader("Output:")
-            st.image(Image.fromarray(result.plot()[:,:,::-1]),caption='Processed Image', use_column_width=True)
+            st.image(result.plot(), caption='Processed Image', use_column_width=True)
 
     elif choice == 'Video':
         uploaded_file = st.file_uploader("Upload a video", type=["mp4", "avi", "mov"])
         if uploaded_file is not None:
             # Save the uploaded video to a temporary file
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
                 temp_file.write(uploaded_file.read())
                 video_path = temp_file.name
             st.warning("Video may take time for processing....!")
+            
             # Open the video
             cap = cv2.VideoCapture(video_path)
 
@@ -47,28 +49,34 @@ def main():
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
             # Create a video writer to save the processed frames
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter('output_video.mp4', fourcc, fps, (width, height))
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as out_temp_file:
+                out_video_path = out_temp_file.name
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(out_video_path, fourcc, fps, (width, height))
 
-            # Process the video frames and save them
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
+                # Process the video frames and save them
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
 
-                # Perform prediction on the frame
-                results = model.predict(frame)
-                result = results[0]
+                    # Perform prediction on the frame
+                    results = model.predict(frame)
+                    result = results[0]  # Get the first result
 
-                # Write the processed frame to the output video
-                out.write(cv2.cvtColor(result.plot()[:, :, ::-1], cv2.COLOR_RGB2BGR))
+                    # Write the processed frame to the output video
+                    out.write(cv2.cvtColor(result.plot(), cv2.COLOR_RGB2BGR))
 
-            # Release the video capture and writer objects
-            cap.release()
-            out.release()
+                # Release the video capture and writer objects
+                cap.release()
+                out.release()
 
             # Display the output video
-            st.video('output_video.mp4')
+            st.video(out_video_path)
+
+            # Clean up temporary files
+            os.remove(video_path)
+            os.remove(out_video_path)
 
 if __name__ == '__main__':
     main()
